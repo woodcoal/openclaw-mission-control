@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ImagePlus, X, Loader2 } from 'lucide-react';
+import Image from 'next/image';
+import { ImagePlus, X, Loader2, Camera, Plus, Upload } from 'lucide-react';
 import type { TaskImage } from '@/lib/types';
 import { useTranslations } from 'next-intl';
 
@@ -127,9 +128,11 @@ export function TaskImages({ taskId }: TaskImagesProps) {
         <div className="grid grid-cols-2 gap-3">
           {images.map((img) => (
             <div key={img.filename} className="group relative rounded-lg overflow-hidden border border-mc-border bg-mc-bg shadow-sm hover:shadow-md transition-all">
-              <img
+              <Image
                 src={`/api/task-images/${taskId}/${img.filename}`}
                 alt={img.original_name}
+                width={200}
+                height={128}
                 className="w-full h-32 object-cover"
               />
               {/* 删除按钮遮罩 */}
