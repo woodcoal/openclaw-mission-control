@@ -23,6 +23,7 @@ interface MissionControlState {
   isOnline: boolean;
   isLoading: boolean;
   selectedBusiness: string;
+  locale: string;
 
   // Actions
   setAgents: (agents: Agent[]) => void;
@@ -38,6 +39,7 @@ interface MissionControlState {
   setIsOnline: (online: boolean) => void;
   setIsLoading: (loading: boolean) => void;
   setSelectedBusiness: (business: string) => void;
+  setLocale: (locale: string) => void;
 
   // Task mutations
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
@@ -55,6 +57,10 @@ interface MissionControlState {
   addOpenclawMessage: (message: Message) => void;
 }
 
+/**
+ * Mission Control 全局状态管理 Hook。
+ * 修复水合错误：locale 初始值设为 'en' 以匹配服务器端。
+ */
 export const useMissionControl = create<MissionControlState>((set) => ({
   // Initial state
   agents: [],
@@ -70,6 +76,7 @@ export const useMissionControl = create<MissionControlState>((set) => ({
   isOnline: false,
   isLoading: true,
   selectedBusiness: 'all',
+  locale: 'en', // 初始值固定为 en，确保与 SSR 一致
 
   // Setters
   setAgents: (agents) => set({ agents }),
@@ -96,6 +103,12 @@ export const useMissionControl = create<MissionControlState>((set) => ({
   },
   setIsLoading: (loading) => set({ isLoading: loading }),
   setSelectedBusiness: (business) => set({ selectedBusiness: business }),
+  setLocale: (locale) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mc-locale', locale);
+    }
+    set({ locale });
+  },
 
   // Task mutations
   updateTaskStatus: (taskId, status) => {

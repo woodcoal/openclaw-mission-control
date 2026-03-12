@@ -6,6 +6,7 @@ import { useMissionControl } from '@/lib/store';
 import type { Agent, AgentStatus, OpenClawSession } from '@/lib/types';
 import { AgentModal } from './AgentModal';
 import { DiscoverAgentsModal } from './DiscoverAgentsModal';
+import { useTranslations } from 'next-intl';
 
 type FilterTab = 'all' | 'working' | 'standby';
 
@@ -15,7 +16,14 @@ interface AgentsSidebarProps {
   isPortrait?: boolean;
 }
 
+/**
+ * 智能助手侧边栏组件。
+ * 显示工作区内的所有助手，支持状态过滤、OpenClaw 连接管理及导入功能。
+ */
 export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = true }: AgentsSidebarProps) {
+  const t = useTranslations('Agents');
+  const c = useTranslations('Common');
+  
   const { agents, selectedAgent, setSelectedAgent, agentOpenClawSessions, setAgentOpenClawSession } = useMissionControl();
   const [filter, setFilter] = useState<FilterTab>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -28,6 +36,9 @@ export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = tr
   const effectiveMinimized = mobileMode ? false : isMinimized;
   const toggleMinimize = () => setIsMinimized(!isMinimized);
 
+  /**
+   * 加载所有助手的 OpenClaw 会话状态。
+   */
   const loadOpenClawSessions = useCallback(async () => {
     for (const agent of agents) {
       try {
@@ -51,6 +62,9 @@ export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = tr
   }, [loadOpenClawSessions, agents.length]);
 
   useEffect(() => {
+    /**
+     * 加载活跃的子助手数量。
+     */
     const loadSubAgentCount = async () => {
       try {
         const res = await fetch('/api/openclaw/sessions?session_type=subagent&status=active');
@@ -68,6 +82,9 @@ export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = tr
     return () => clearInterval(interval);
   }, []);
 
+  /**
+   * 处理助手与 OpenClaw 的连接/断开逻辑。
+   */
   const handleConnectToOpenClaw = async (agent: Agent, e: React.MouseEvent) => {
     e.stopPropagation();
     setConnectingAgentId(agent.id);
@@ -88,7 +105,7 @@ export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = tr
         } else {
           const error = await res.json();
           console.error('Failed to connect to OpenClaw:', error);
-          alert(`Failed to connect: ${error.error || 'Unknown error'}`);
+          alert(t('connectError', { error: error.error || 'Unknown error' }));
         }
       }
     } catch (error) {
@@ -103,6 +120,9 @@ export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = tr
     return agent.status === filter;
   });
 
+  /**
+   * 获取状态标签的样式类。
+   */
   const getStatusBadge = (status: AgentStatus) => {
     const styles = {
       standby: 'status-standby',
@@ -124,14 +144,14 @@ export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = tr
             <button
               onClick={toggleMinimize}
               className="p-1 rounded hover:bg-mc-bg-tertiary text-mc-text-secondary hover:text-mc-text transition-colors"
-              aria-label={effectiveMinimized ? 'Expand agents' : 'Minimize agents'}
+              aria-label={effectiveMinimized ? t('expand') : t('minimize')}
             >
               {effectiveMinimized ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
             </button>
           )}
           {!effectiveMinimized && (
             <>
-              <span className="text-sm font-medium uppercase tracking-wider">Agents</span>
+              <span className="text-sm font-medium uppercase tracking-wider">{t('title')}</span>
               <span className="bg-mc-bg-tertiary text-mc-text-secondary text-xs px-2 py-0.5 rounded ml-2">{agents.length}</span>
             </>
           )}
@@ -143,7 +163,7 @@ export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = tr
               <div className="mb-3 mt-3 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-green-400">●</span>
-                  <span className="text-mc-text">Active Sub-Agents:</span>
+                  <span className="text-mc-text">{t('activeSubAgents')}:</span>
                   <span className="font-bold text-green-400">{activeSubAgents}</span>
                 </div>
               </div>
@@ -158,7 +178,7 @@ export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = tr
                     filter === tab ? 'bg-mc-accent text-mc-bg font-medium' : 'text-mc-text-secondary hover:bg-mc-bg-tertiary'
                   }`}
                 >
-                  {tab}
+                  {c(tab)}
                 </button>
               ))}
             </div>
@@ -215,19 +235,19 @@ export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = tr
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm truncate">{agent.name}</span>
-                    {!!agent.is_master && <span className="text-xs text-mc-accent-yellow">★</span>}
+                    {!!agent.is_master && <span className="text-xs text-mc-accent-yellow" title={t('master')}>★</span>}
                   </div>
                   <div className="text-xs text-mc-text-secondary truncate flex items-center gap-1">
                     {agent.role}
                     {agent.source === 'gateway' && (
-                      <span className="text-[10px] px-1 py-0 bg-blue-500/20 text-blue-400 rounded" title="Imported from Gateway">
+                      <span className="text-[10px] px-1 py-0 bg-blue-500/20 text-blue-400 rounded" title={t('imported')}>
                         GW
                       </span>
                     )}
                   </div>
                 </div>
 
-                <span className={`text-xs px-2 py-0.5 rounded uppercase ${getStatusBadge(agent.status)}`}>{agent.status}</span>
+                <span className={`text-xs px-2 py-0.5 rounded uppercase ${getStatusBadge(agent.status)}`}>{c(agent.status)}</span>
               </button>
 
               {!!agent.is_master && (
@@ -244,17 +264,17 @@ export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = tr
                     {isConnecting ? (
                       <>
                         <Loader2 className="w-3 h-3 animate-spin" />
-                        <span>Connecting...</span>
+                        <span>{c('connecting')}</span>
                       </>
                     ) : openclawSession ? (
                       <>
                         <Zap className="w-3 h-3" />
-                        <span>OpenClaw Connected</span>
+                        <span>{t('disconnectOpenClaw')}</span>
                       </>
                     ) : (
                       <>
                         <ZapOff className="w-3 h-3" />
-                        <span>Connect to OpenClaw</span>
+                        <span>{t('connectOpenClaw')}</span>
                       </>
                     )}
                   </button>
@@ -272,14 +292,14 @@ export function AgentsSidebar({ workspaceId, mobileMode = false, isPortrait = tr
             className="w-full min-h-11 flex items-center justify-center gap-2 px-3 bg-mc-bg-tertiary hover:bg-mc-border rounded text-sm text-mc-text-secondary hover:text-mc-text transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Add Agent
+            {t('addAgent')}
           </button>
           <button
             onClick={() => setShowDiscoverModal(true)}
             className="w-full min-h-11 flex items-center justify-center gap-2 px-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded text-sm text-blue-400 hover:text-blue-300 transition-colors"
           >
             <Search className="w-4 h-4" />
-            Import from Gateway
+            {t('importGateway')}
           </button>
         </div>
       )}

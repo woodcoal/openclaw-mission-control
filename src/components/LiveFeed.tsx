@@ -5,6 +5,7 @@ import { ChevronRight, ChevronLeft, Clock } from 'lucide-react';
 import { useMissionControl } from '@/lib/store';
 import type { Event } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
+import { useTranslations } from 'next-intl';
 
 type FeedFilter = 'all' | 'tasks' | 'agents';
 
@@ -13,7 +14,17 @@ interface LiveFeedProps {
   isPortrait?: boolean;
 }
 
+/**
+ * 实时动态侧边栏组件。
+ * 显示任务创建、分配、完成及助手状态变更等全局动态流。
+ */
 export function LiveFeed({ mobileMode = false, isPortrait = true }: LiveFeedProps) {
+  const d = useTranslations('Dashboard');
+  const c = useTranslations('Common');
+  const t = useTranslations('Tasks');
+  const a = useTranslations('Agents');
+  const act = useTranslations('Activity');
+  
   const { events } = useMissionControl();
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [isMinimized, setIsMinimized] = useState(false);
@@ -40,12 +51,12 @@ export function LiveFeed({ mobileMode = false, isPortrait = true }: LiveFeedProp
             <button
               onClick={toggleMinimize}
               className="p-1 rounded hover:bg-mc-bg-tertiary text-mc-text-secondary hover:text-mc-text transition-colors"
-              aria-label={effectiveMinimized ? 'Expand feed' : 'Minimize feed'}
+              aria-label={effectiveMinimized ? c('expandFeed') : c('minimizeFeed')}
             >
               {effectiveMinimized ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
           )}
-          {!effectiveMinimized && <span className="text-sm font-medium uppercase tracking-wider">Live Feed</span>}
+          {!effectiveMinimized && <span className="text-sm font-medium uppercase tracking-wider">{d('liveFeed')}</span>}
         </div>
 
         {!effectiveMinimized && (
@@ -58,7 +69,7 @@ export function LiveFeed({ mobileMode = false, isPortrait = true }: LiveFeedProp
                   filter === tab ? 'bg-mc-accent text-mc-bg font-medium' : 'text-mc-text-secondary hover:bg-mc-bg-tertiary'
                 }`}
               >
-                {tab}
+                {tab === 'all' ? c('all') : tab === 'tasks' ? t('label') : a('title')}
               </button>
             ))}
           </div>
@@ -68,7 +79,7 @@ export function LiveFeed({ mobileMode = false, isPortrait = true }: LiveFeedProp
       {!effectiveMinimized && (
         <div className="flex-1 overflow-y-auto p-2 space-y-1 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           {filteredEvents.length === 0 ? (
-            <div className="text-center py-8 text-mc-text-secondary text-sm">No events yet</div>
+            <div className="text-center py-8 text-mc-text-secondary text-sm">{act('noEvents')}</div>
           ) : (
             filteredEvents.map((event) => <EventItem key={event.id} event={event} />)
           )}
@@ -78,7 +89,14 @@ export function LiveFeed({ mobileMode = false, isPortrait = true }: LiveFeedProp
   );
 }
 
+/**
+ * 单条动态项组件。
+ * @param {Object} param - 组件属性。
+ */
 function EventItem({ event }: { event: Event }) {
+  /**
+   * 根据动态类型获取图标。
+   */
   const getEventIcon = (type: string) => {
     switch (type) {
       case 'task_created':

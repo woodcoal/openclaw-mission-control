@@ -55,3 +55,6 @@ next-env.d.ts
 # Uploaded task images (user data)
 /data/task-images/*
 !/data/task-images/.gitkeep
+
+# gemini
+GEMINI.md

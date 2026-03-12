@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Users, Save, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useMissionControl } from '@/lib/store';
 import type { WorkflowTemplate, WorkflowStage } from '@/lib/types';
+import { useTranslations } from 'next-intl';
 
 interface TeamTabProps {
   taskId: string;
@@ -17,7 +18,14 @@ interface RoleAssignment {
   agent_emoji?: string;
 }
 
+/**
+ * 团队协作标签页组件。
+ * 提供工作流模板选择、角色与助手的关联分配功能。
+ */
 export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
+  const t = useTranslations('Team');
+  const common = useTranslations('Common');
+  
   const { agents } = useMissionControl();
   const [roles, setRoles] = useState<RoleAssignment[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowTemplate[]>([]);
@@ -27,7 +35,7 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load existing roles and workflows
+  // 加载现有的角色分配和工作流模板
   useEffect(() => {
     const load = async () => {
       try {
@@ -71,14 +79,17 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
     ? currentWorkflow.stages.filter((s: WorkflowStage) => s.role).map((s: WorkflowStage) => s.role as string)
     : [];
 
-  // Unique roles (remove duplicates)
+  // 去重角色
   const uniqueRoles = Array.from(new Set(requiredRoles));
 
+  /**
+   * 处理工作流模板变更。
+   */
   const handleWorkflowChange = async (templateId: string) => {
     setSelectedWorkflow(templateId);
     setError(null);
 
-    // Update task's workflow_template_id
+    // 更新任务的工作流模板 ID
     try {
       await fetch(`/api/tasks/${taskId}`, {
         method: 'PATCH',
@@ -86,10 +97,10 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
         body: JSON.stringify({ workflow_template_id: templateId || null }),
       });
     } catch {
-      // Best-effort
+      // 尽力而为
     }
 
-    // If a workflow is selected, ensure role slots exist for its stages
+    // 如果选择了工作流，确保其阶段对应的角色槽位已存在
     const wf = workflows.find(w => w.id === templateId);
     if (wf) {
       const wfRoles = Array.from(new Set(
@@ -107,6 +118,9 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
     }
   };
 
+  /**
+   * 处理角色对应的助手变更。
+   */
   const handleRoleAgentChange = (role: string, agentId: string) => {
     setRoles(prev => {
       const existing = prev.find(r => r.role === role);
@@ -118,6 +132,9 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
     setSaved(false);
   };
 
+  /**
+   * 保存角色分配。
+   */
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -145,6 +162,9 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
     }
   };
 
+  /**
+   * 添加自定义角色槽位。
+   */
   const addCustomRole = () => {
     setRoles(prev => [...prev, { role: '', agent_id: '' }]);
   };
@@ -163,15 +183,15 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* Workflow Template Selector */}
+      {/* 工作流模板选择器 */}
       <div>
-        <label className="block text-sm font-medium mb-2">Workflow Template</label>
+        <label className="block text-sm font-medium mb-2">{t('workflowTemplate')}</label>
         <select
           value={selectedWorkflow}
           onChange={(e) => handleWorkflowChange(e.target.value)}
           className="w-full min-h-11 bg-mc-bg border border-mc-border rounded px-3 py-2 text-sm focus:outline-none focus:border-mc-accent"
         >
-          <option value="">No workflow (single agent)</option>
+          <option value="">{t('noWorkflow')}</option>
           {workflows.map(wf => (
             <option key={wf.id} value={wf.id}>
               {wf.name}{wf.is_default ? ' (Default)' : ''} — {wf.description}
@@ -180,11 +200,11 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
         </select>
       </div>
 
-      {/* Workflow Stages Visualization */}
+      {/* 工作流阶段可视化 */}
       {currentWorkflow && (
         <div>
-          <label className="block text-sm font-medium mb-2">Stages</label>
-          <div className="flex items-center gap-1 overflow-x-auto pb-1">
+          <label className="block text-sm font-medium mb-2">{t('stages')}</label>
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 text-nowrap">
             {currentWorkflow.stages.map((stage: WorkflowStage, i: number) => (
               <div key={stage.id} className="flex items-center gap-1 flex-shrink-0">
                 <div className={`px-3 py-1.5 rounded-full text-xs font-medium ${
@@ -204,26 +224,26 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
         </div>
       )}
 
-      {/* Missing Roles Warning */}
+      {/* 角色缺失警告 */}
       {missingRoles.length > 0 && (
-        <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+        <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg shadow-sm">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-orange-300 mt-0.5 flex-shrink-0" />
             <div>
               <p className="text-sm text-orange-200">
-                Missing agents for: {missingRoles.join(', ')}
+                {t('missingRoles', { roles: missingRoles.join(', ') })}
               </p>
               <p className="text-xs text-orange-300/70 mt-1">
-                Assign agents below so the workflow can auto-handoff at each stage.
+                {t('missingRolesHint')}
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Role Assignments */}
+      {/* 角色分配 */}
       <div>
-        <label className="block text-sm font-medium mb-2">Role Assignments</label>
+        <label className="block text-sm font-medium mb-2">{t('roleAssignments')}</label>
         <div className="space-y-3">
           {(uniqueRoles.length > 0 ? uniqueRoles : roles.map(r => r.role).filter(Boolean)).map(role => {
             if (!role) return null;
@@ -238,7 +258,7 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
                   onChange={(e) => handleRoleAgentChange(role, e.target.value)}
                   className="flex-1 min-h-11 bg-mc-bg border border-mc-border rounded px-3 py-2 text-sm focus:outline-none focus:border-mc-accent"
                 >
-                  <option value="">Unassigned</option>
+                  <option value="">{common('unassigned')}</option>
                   {agents.map(agent => (
                     <option key={agent.id} value={agent.id}>
                       {agent.avatar_emoji} {agent.name} — {agent.role}
@@ -249,7 +269,7 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
             );
           })}
 
-          {/* Custom role slots (not from workflow) */}
+          {/* 自定义角色槽位（非来自工作流） */}
           {roles.filter(r => !uniqueRoles.includes(r.role) && r.role).map((r, i) => (
             <div key={`custom-${i}`} className="flex items-center gap-3">
               <input
@@ -259,7 +279,7 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
                     pi === roles.indexOf(r) ? { ...pr, role: e.target.value } : pr
                   ));
                 }}
-                placeholder="Role name"
+                placeholder={t('customRolePlaceholder')}
                 className="w-24 bg-mc-bg border border-mc-border rounded px-2 py-2 text-xs focus:outline-none focus:border-mc-accent"
               />
               <select
@@ -267,7 +287,7 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
                 onChange={(e) => handleRoleAgentChange(r.role, e.target.value)}
                 className="flex-1 min-h-11 bg-mc-bg border border-mc-border rounded px-3 py-2 text-sm focus:outline-none focus:border-mc-accent"
               >
-                <option value="">Unassigned</option>
+                <option value="">{common('unassigned')}</option>
                 {agents.map(agent => (
                   <option key={agent.id} value={agent.id}>
                     {agent.avatar_emoji} {agent.name} — {agent.role}
@@ -277,7 +297,7 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
             </div>
           ))}
 
-          {/* Learner role - always show if not in uniqueRoles */}
+          {/* Learner 角色 - 如果不在 uniqueRoles 中则始终显示 */}
           {!uniqueRoles.includes('learner') && (
             <div className="flex items-center gap-3 opacity-60 hover:opacity-100 transition-opacity">
               <div className="w-24 text-xs font-medium text-mc-text-secondary capitalize flex-shrink-0">
@@ -288,7 +308,7 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
                 onChange={(e) => handleRoleAgentChange('learner', e.target.value)}
                 className="flex-1 min-h-11 bg-mc-bg border border-mc-border rounded px-3 py-2 text-sm focus:outline-none focus:border-mc-accent"
               >
-                <option value="">Unassigned (optional)</option>
+                <option value="">{t('unassignedOptional')}</option>
                 {agents.map(agent => (
                   <option key={agent.id} value={agent.id}>
                     {agent.avatar_emoji} {agent.name} — {agent.role}
@@ -300,14 +320,14 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
 
           <button
             onClick={addCustomRole}
-            className="text-xs text-mc-accent hover:text-mc-accent/80"
+            className="text-xs text-mc-accent hover:text-mc-accent/80 font-medium"
           >
-            + Add custom role
+            {t('addCustomRole')}
           </button>
         </div>
       </div>
 
-      {/* Error / Success */}
+      {/* 错误 / 成功反馈 */}
       {error && (
         <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
           <p className="text-sm text-red-400">{error}</p>
@@ -317,18 +337,18 @@ export function TeamTab({ taskId, workspaceId }: TeamTabProps) {
       {saved && (
         <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-green-400" />
-          <p className="text-sm text-green-400">Team saved successfully</p>
+          <p className="text-sm text-green-400">{t('saveSuccess')}</p>
         </div>
       )}
 
-      {/* Save Button */}
+      {/* 保存按钮 */}
       <button
         onClick={handleSave}
         disabled={saving}
         className="w-full min-h-11 flex items-center justify-center gap-2 bg-mc-accent text-mc-bg rounded text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50"
       >
         <Save className="w-4 h-4" />
-        {saving ? 'Saving...' : 'Save Team'}
+        {saving ? common('saving') : t('saveTeam')}
       </button>
     </div>
   );

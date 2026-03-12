@@ -8,6 +8,7 @@ import { getConfig } from '@/lib/config';
 import type { Task, TaskStatus } from '@/lib/types';
 import { TaskModal } from './TaskModal';
 import { formatDistanceToNow } from 'date-fns';
+import { useTranslations } from 'next-intl';
 
 interface MissionQueueProps {
   workspaceId?: string;
@@ -15,18 +16,27 @@ interface MissionQueueProps {
   isPortrait?: boolean;
 }
 
-const COLUMNS: { id: TaskStatus; label: string; color: string }[] = [
-  { id: 'planning', label: '📋 Planning', color: 'border-t-mc-accent-purple' },
-  { id: 'inbox', label: 'Inbox', color: 'border-t-mc-accent-pink' },
-  { id: 'assigned', label: 'Assigned', color: 'border-t-mc-accent-yellow' },
-  { id: 'in_progress', label: 'In Progress', color: 'border-t-mc-accent' },
-  { id: 'testing', label: 'Testing', color: 'border-t-mc-accent-cyan' },
-  { id: 'review', label: 'Review', color: 'border-t-mc-accent-purple' },
-  { id: 'verification', label: 'Verification', color: 'border-t-orange-500' },
-  { id: 'done', label: 'Done', color: 'border-t-mc-accent-green' },
-];
-
+/**
+ * 任务队列（看板）组件。
+ * 支持桌面端拖拽和移动端切换视图，处理状态变更及自动派遣。
+ */
 export function MissionQueue({ workspaceId, mobileMode = false, isPortrait = true }: MissionQueueProps) {
+  const t = useTranslations('Dashboard');
+  const st = useTranslations('Status');
+  const taskT = useTranslations('Tasks');
+  const prT = useTranslations('Priority');
+  
+  const COLUMNS: { id: TaskStatus; label: string; color: string }[] = [
+    { id: 'planning', label: st('planning'), color: 'border-t-mc-accent-purple' },
+    { id: 'inbox', label: st('inbox'), color: 'border-t-mc-accent-pink' },
+    { id: 'assigned', label: st('assigned'), color: 'border-t-mc-accent-yellow' },
+    { id: 'in_progress', label: st('in_progress'), color: 'border-t-mc-accent' },
+    { id: 'testing', label: st('testing'), color: 'border-t-mc-accent-cyan' },
+    { id: 'review', label: st('review'), color: 'border-t-mc-accent-purple' },
+    { id: 'verification', label: st('verification'), color: 'border-t-orange-500' },
+    { id: 'done', label: st('done'), color: 'border-t-mc-accent-green' },
+  ];
+
   const { tasks, updateTaskStatus, addEvent } = useMissionControl();
   const [compactEmptyColumns, setCompactEmptyColumns] = useState(true);
 
@@ -35,21 +45,30 @@ export function MissionQueue({ workspaceId, mobileMode = false, isPortrait = tru
     setCompactEmptyColumns(cfg.kanbanCompactEmptyColumns ?? true);
   }, []);
 
+  /**
+   * 计算桌面端看板列宽。
+   */
   const getDesktopColumnWidth = (taskCount: number): string => {
     if (!compactEmptyColumns) return '280px';
     if (taskCount === 0) return 'fit-content';
-    // Slightly grow busy columns while keeping a sane cap
     const widthPx = Math.min(380, 250 + taskCount * 14);
     return `${widthPx}px`;
   };
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
   const [mobileStatus, setMobileStatus] = useState<TaskStatus>('planning');
   const [statusMoveTask, setStatusMoveTask] = useState<Task | null>(null);
 
+  /**
+   * 获取指定状态的任务。
+   */
   const getTasksByStatus = (status: TaskStatus) => tasks.filter((task) => task.status === status);
 
+  /**
+   * 更新任务状态并同步到服务器，处理自动派遣。
+   */
   const updateTaskStatusWithPersist = async (task: Task, targetStatus: TaskStatus) => {
     if (task.status === targetStatus) return;
 
@@ -122,14 +141,14 @@ export function MissionQueue({ workspaceId, mobileMode = false, isPortrait = tru
       <div className="p-3 border-b border-mc-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ChevronRight className="w-4 h-4 text-mc-text-secondary" />
-          <span className="text-sm font-medium uppercase tracking-wider">Mission Queue</span>
+          <span className="text-sm font-medium uppercase tracking-wider">{t('missionQueue')}</span>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-2 px-4 min-h-11 bg-mc-accent-pink text-mc-bg rounded text-sm font-medium hover:bg-mc-accent-pink/90"
         >
           <Plus className="w-4 h-4" />
-          New Task
+          {t('newTask')}
         </button>
       </div>
 
@@ -194,7 +213,7 @@ export function MissionQueue({ workspaceId, mobileMode = false, isPortrait = tru
           <div className={`min-w-0 ${isPortrait ? 'space-y-3' : 'space-y-2'}`}>
             {mobileTasks.length === 0 ? (
               <div className="text-sm text-mc-text-secondary bg-mc-bg-secondary border border-mc-border rounded-lg p-4">
-                No tasks in this status.
+                {t('noTasks')}
               </div>
             ) : (
               mobileTasks.map((task) => (
@@ -223,7 +242,7 @@ export function MissionQueue({ workspaceId, mobileMode = false, isPortrait = tru
             className="w-full sm:max-w-md bg-mc-bg-secondary border border-mc-border rounded-t-xl sm:rounded-xl p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-sm text-mc-text-secondary mb-2">Move task</div>
+            <div className="text-sm text-mc-text-secondary mb-2">{taskT('moveStatus')}</div>
             <div className="font-medium mb-4 line-clamp-2">{statusMoveTask.title}</div>
             <div className="space-y-2 max-h-[50vh] overflow-y-auto">
               {COLUMNS.map((column) => (
@@ -257,7 +276,13 @@ interface TaskCardProps {
   portraitMode?: boolean;
 }
 
+/**
+ * 任务卡片组件。
+ */
 function TaskCard({ task, onDragStart, onClick, onMoveStatus, isDragging, mobileMode, portraitMode = true }: TaskCardProps) {
+  const t = useTranslations('Tasks');
+  const prT = useTranslations('Priority');
+
   const priorityStyles = {
     low: 'text-mc-text-secondary',
     normal: 'text-mc-accent',
@@ -297,28 +322,28 @@ function TaskCard({ task, onDragStart, onClick, onMoveStatus, isDragging, mobile
         {isPlanning && (
           <div className={`flex items-center gap-2 ${portraitMode ? 'mb-3 py-2 px-3' : 'mb-2 py-1.5 px-2.5'} bg-purple-500/10 rounded-md border border-purple-500/20`}>
             <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse flex-shrink-0" />
-            <span className="text-xs text-purple-400 font-medium">Continue planning</span>
+            <span className="text-xs text-purple-400 font-medium">{t('continuePlanning')}</span>
           </div>
         )}
 
         {isAssigned && dispatchError && (
           <div className={`flex items-start gap-2 ${portraitMode ? 'mb-3 py-2 px-3' : 'mb-2 py-1.5 px-2.5'} bg-red-500/10 rounded-md border border-red-500/30`}>
             <div className="w-2 h-2 bg-red-400 rounded-full mt-1 flex-shrink-0" />
-            <span className="text-xs text-red-300">Assigned, but blocked: {dispatchError}</span>
+            <span className="text-xs text-red-300">{t('assignedBlocked')}: {dispatchError}</span>
           </div>
         )}
 
         {isAssigned && !dispatchError && (
           <div className={`flex items-center gap-2 ${portraitMode ? 'mb-3 py-2 px-3' : 'mb-2 py-1.5 px-2.5'} bg-yellow-500/10 rounded-md border border-yellow-500/30`}>
             <div className="w-2 h-2 bg-yellow-400 rounded-full flex-shrink-0" />
-            <span className="text-xs text-yellow-200">Assigned and validating — auto-start will move this to In Progress.</span>
+            <span className="text-xs text-yellow-200">{t('assignedValidating')}</span>
           </div>
         )}
 
         {task.status === 'inbox' && !task.assigned_agent_id && (
           <div className={`flex items-center gap-2 ${portraitMode ? 'mb-3 py-2 px-3' : 'mb-2 py-1.5 px-2.5'} bg-amber-500/10 rounded-md border border-amber-500/30`}>
             <div className="w-2 h-2 bg-amber-400 rounded-full flex-shrink-0" />
-            <span className="text-xs text-amber-200">Needs agent — assign to start</span>
+            <span className="text-xs text-amber-200">{t('needsAgent')}</span>
           </div>
         )}
 
@@ -332,7 +357,7 @@ function TaskCard({ task, onDragStart, onClick, onMoveStatus, isDragging, mobile
         {task.status === 'review' && !dispatchError && (
           <div className={`flex items-center gap-2 ${portraitMode ? 'mb-3 py-2 px-3' : 'mb-2 py-1.5 px-2.5'} bg-cyan-500/10 rounded-md border border-cyan-500/30`}>
             <div className="w-2 h-2 bg-cyan-400 rounded-full flex-shrink-0" />
-            <span className="text-xs text-cyan-200">In queue — waiting for verification</span>
+            <span className="text-xs text-cyan-200">{t('inQueueWaiting')}</span>
           </div>
         )}
 
@@ -346,7 +371,7 @@ function TaskCard({ task, onDragStart, onClick, onMoveStatus, isDragging, mobile
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-mc-border/20">
           <div className="flex items-center gap-1.5">
             <div className={`w-1.5 h-1.5 rounded-full ${priorityDots[task.priority]}`} />
-            <span className={`text-xs capitalize ${priorityStyles[task.priority]}`}>{task.priority}</span>
+            <span className={`text-xs capitalize ${priorityStyles[task.priority]}`}>{prT(task.priority)}</span>
           </div>
           <span className="text-[10px] text-mc-text-secondary/60">{formatDistanceToNow(new Date(task.created_at), { addSuffix: true })}</span>
         </div>
@@ -360,7 +385,7 @@ function TaskCard({ task, onDragStart, onClick, onMoveStatus, isDragging, mobile
             className={`w-full min-h-11 rounded-md border border-mc-border bg-mc-bg flex items-center justify-center gap-2 text-mc-text-secondary ${portraitMode ? 'mt-3 text-sm' : 'mt-2 text-xs'}`}
           >
             <ArrowRightLeft className="w-4 h-4" />
-            Move Status
+            {t('moveStatus')}
           </button>
         )}
       </div>

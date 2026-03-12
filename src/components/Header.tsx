@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Zap, Settings, ChevronLeft, LayoutGrid } from 'lucide-react';
 import { useMissionControl } from '@/lib/store';
 import { format } from 'date-fns';
+import { useTranslations } from 'next-intl';
 import type { Workspace } from '@/lib/types';
 
 interface HeaderProps {
@@ -13,8 +14,17 @@ interface HeaderProps {
   isPortrait?: boolean;
 }
 
+/**
+ * Header 组件，提供导航、状态监控和工作区信息。
+ * 适配多语言切换。
+ * @param {HeaderProps} props - 组件属性。
+ * @returns {JSX.Element} 渲染的头部组件。
+ */
 export function Header({ workspace, isPortrait = true }: HeaderProps) {
   const router = useRouter();
+  const t = useTranslations('Header');
+  const d = useTranslations('Dashboard');
+  const c = useTranslations('Common');
   const { agents, tasks, isOnline } = useMissionControl();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeSubAgents, setActiveSubAgents] = useState(0);
@@ -25,6 +35,9 @@ export function Header({ workspace, isPortrait = true }: HeaderProps) {
   }, []);
 
   useEffect(() => {
+    /**
+     * 加载活跃的子智能助手数量。
+     */
     const loadSubAgentCount = async () => {
       try {
         const res = await fetch('/api/openclaw/sessions?session_type=subagent&status=active');
@@ -68,7 +81,7 @@ export function Header({ workspace, isPortrait = true }: HeaderProps) {
               </div>
             </div>
 
-            <button onClick={() => router.push('/settings')} className="min-h-11 min-w-11 p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary shrink-0" title="Settings">
+            <button onClick={() => router.push('/settings')} className="min-h-11 min-w-11 p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary shrink-0" title={t('settings')}>
               <Settings className="w-5 h-5" />
             </button>
           </div>
@@ -82,17 +95,17 @@ export function Header({ workspace, isPortrait = true }: HeaderProps) {
               }`}
             >
               <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-mc-accent-green animate-pulse' : 'bg-mc-accent-red'}`} />
-              {isOnline ? 'ONLINE' : 'OFFLINE'}
+              {isOnline ? c('online') : c('offline')}
             </div>
 
             <div className="flex-1 grid grid-cols-2 gap-2">
               <div className="min-h-11 rounded border border-mc-border bg-mc-bg-tertiary px-2 flex items-center justify-center gap-1.5 text-xs">
                 <span className="text-mc-accent-cyan font-semibold">{activeAgents}</span>
-                <span className="text-mc-text-secondary">active</span>
+                <span className="text-mc-text-secondary">{c('active')}</span>
               </div>
               <div className="min-h-11 rounded border border-mc-border bg-mc-bg-tertiary px-2 flex items-center justify-center gap-1.5 text-xs">
                 <span className="text-mc-accent-purple font-semibold">{tasksInQueue}</span>
-                <span className="text-mc-text-secondary">queued</span>
+                <span className="text-mc-text-secondary">{c('queued')}</span>
               </div>
             </div>
           </div>
@@ -102,7 +115,7 @@ export function Header({ workspace, isPortrait = true }: HeaderProps) {
           <div className="flex items-center gap-2 md:gap-4 min-w-0">
             <div className="hidden sm:flex items-center gap-2">
               <Zap className="w-5 h-5 text-mc-accent-cyan" />
-              <span className="font-semibold text-mc-text uppercase tracking-wider text-sm">Mission Control</span>
+              <span className="font-semibold text-mc-text uppercase tracking-wider text-sm">{t('title')}</span>
             </div>
 
             {workspace ? (
@@ -120,7 +133,7 @@ export function Header({ workspace, isPortrait = true }: HeaderProps) {
             ) : (
               <Link href="/" className="flex items-center gap-2 px-3 py-1 bg-mc-bg-tertiary rounded hover:bg-mc-bg transition-colors">
                 <LayoutGrid className="w-4 h-4" />
-                <span className="text-sm">All Workspaces</span>
+                <span className="text-sm">{t('allWorkspaces')}</span>
               </Link>
             )}
           </div>
@@ -129,11 +142,11 @@ export function Header({ workspace, isPortrait = true }: HeaderProps) {
             <div className="hidden lg:flex items-center gap-8">
               <div className="text-center">
                 <div className="text-2xl font-bold text-mc-accent-cyan">{activeAgents}</div>
-                <div className="text-xs text-mc-text-secondary uppercase">Agents Active</div>
+                <div className="text-xs text-mc-text-secondary uppercase">{d('agentsActive')}</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-mc-accent-purple">{tasksInQueue}</div>
-                <div className="text-xs text-mc-text-secondary uppercase">Tasks in Queue</div>
+                <div className="text-xs text-mc-text-secondary uppercase">{d('tasksInQueue')}</div>
               </div>
             </div>
           )}
@@ -148,9 +161,9 @@ export function Header({ workspace, isPortrait = true }: HeaderProps) {
               }`}
             >
               <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-mc-accent-green animate-pulse' : 'bg-mc-accent-red'}`} />
-              {isOnline ? 'ONLINE' : 'OFFLINE'}
+              {isOnline ? c('online') : c('offline')}
             </div>
-            <button onClick={() => router.push('/settings')} className="min-h-11 min-w-11 p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary" title="Settings">
+            <button onClick={() => router.push('/settings')} className="min-h-11 min-w-11 p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary" title={t('settings')}>
               <Settings className="w-5 h-5" />
             </button>
           </div>

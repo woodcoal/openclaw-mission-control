@@ -13,10 +13,18 @@ import { useMissionControl } from '@/lib/store';
 import { useSSE } from '@/hooks/useSSE';
 import { debug } from '@/lib/debug';
 import type { Task, Workspace } from '@/lib/types';
+import { useTranslations } from 'next-intl';
 
 type MobileTab = 'queue' | 'agents' | 'feed' | 'settings';
 
+/**
+ * 工作区详情页面组件。
+ * 根据 URL 中的 slug 加载并显示工作区的任务看板、助手和动态。
+ */
 export default function WorkspacePage() {
+  const t = useTranslations('Workspace');
+  const c = useTranslations('Common');
+  
   const params = useParams();
   const slug = params.slug as string;
 
@@ -44,6 +52,9 @@ export default function WorkspacePage() {
   }, []);
 
   useEffect(() => {
+    /**
+     * 根据 slug 获取工作区基础信息。
+     */
     async function loadWorkspace() {
       try {
         const res = await fetch(`/api/workspaces/${slug}`);
@@ -77,6 +88,9 @@ export default function WorkspacePage() {
 
     const workspaceId = workspace.id;
 
+    /**
+     * 加载工作区内的助手、任务和全局动态。
+     */
     async function loadData() {
       try {
         debug.api('Loading workspace data...', { workspaceId });
@@ -101,6 +115,9 @@ export default function WorkspacePage() {
       }
     }
 
+    /**
+     * 检查 OpenClaw Gateway 的连接状态。
+     */
     async function checkOpenClaw() {
       try {
         const controller = new AbortController();
@@ -121,6 +138,7 @@ export default function WorkspacePage() {
     loadData();
     checkOpenClaw();
 
+    // 轮询：动态更新
     const eventPoll = setInterval(async () => {
       try {
         const res = await fetch('/api/events?limit=20');
@@ -132,6 +150,7 @@ export default function WorkspacePage() {
       }
     }, 30000);
 
+    // 轮询：任务更新（作为 SSE 的兜底）
     const taskPoll = setInterval(async () => {
       try {
         const res = await fetch(`/api/tasks?workspace_id=${workspaceId}`);
@@ -156,6 +175,7 @@ export default function WorkspacePage() {
       }
     }, 60000);
 
+    // 轮询：OpenClaw 状态
     const connectionCheck = setInterval(async () => {
       try {
         const res = await fetch('/api/openclaw/status');
@@ -180,11 +200,11 @@ export default function WorkspacePage() {
       <div className="min-h-screen bg-mc-bg flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4">🔍</div>
-          <h1 className="text-2xl font-bold mb-2">Workspace Not Found</h1>
-          <p className="text-mc-text-secondary mb-6">The workspace &ldquo;{slug}&rdquo; doesn&apos;t exist.</p>
+          <h1 className="text-2xl font-bold mb-2">{t('notFound')}</h1>
+          <p className="text-mc-text-secondary mb-6">{t('notFoundDesc', { slug })}</p>
           <Link href="/" className="inline-flex items-center gap-2 px-6 py-3 bg-mc-accent text-mc-bg rounded-lg font-medium hover:bg-mc-accent/90">
             <ChevronLeft className="w-4 h-4" />
-            Back to Dashboard
+            {t('backToDashboard')}
           </Link>
         </div>
       </div>
@@ -196,7 +216,7 @@ export default function WorkspacePage() {
       <div className="min-h-screen bg-mc-bg flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4 animate-pulse">🦞</div>
-          <p className="text-mc-text-secondary">Loading {slug}...</p>
+          <p className="text-mc-text-secondary">{t('loadingWorkspace', { slug })}</p>
         </div>
       </div>
     );
@@ -243,19 +263,19 @@ export default function WorkspacePage() {
                   onClick={() => setMobileTab('agents')}
                   className={`min-h-11 rounded-lg text-xs ${mobileTab === 'agents' ? 'bg-mc-accent text-mc-bg font-medium' : 'bg-mc-bg-secondary border border-mc-border text-mc-text-secondary'}`}
                 >
-                  Agents
+                  {c('all')}
                 </button>
                 <button
                   onClick={() => setMobileTab('feed')}
                   className={`min-h-11 rounded-lg text-xs ${mobileTab === 'feed' ? 'bg-mc-accent text-mc-bg font-medium' : 'bg-mc-bg-secondary border border-mc-border text-mc-text-secondary'}`}
                 >
-                  Feed
+                  {c('feed')}
                 </button>
                 <button
                   onClick={() => setMobileTab('settings')}
                   className={`min-h-11 rounded-lg text-xs ${mobileTab === 'settings' ? 'bg-mc-accent text-mc-bg font-medium' : 'bg-mc-bg-secondary border border-mc-border text-mc-text-secondary'}`}
                 >
-                  Settings
+                  {c('settings')}
                 </button>
               </div>
 
@@ -289,7 +309,17 @@ export default function WorkspacePage() {
   );
 }
 
+/**
+ * 移动端底部标签页按钮。
+ * @param {Object} param - 组件属性。
+ */
 function MobileTabButton({ label, active, icon, onClick }: { label: string; active: boolean; icon: ReactNode; onClick: () => void }) {
+  const d = useTranslations('Dashboard');
+  const c = useTranslations('Common');
+  
+  // 映射 label 到翻译
+  const translatedLabel = label === 'Queue' ? d('missionQueue') : label === 'Agents' ? d('agents') : label === 'Feed' ? d('liveFeed') : c('settings');
+
   return (
     <button
       onClick={onClick}
@@ -298,17 +328,23 @@ function MobileTabButton({ label, active, icon, onClick }: { label: string; acti
       }`}
     >
       {icon}
-      <span>{label}</span>
+      <span>{translatedLabel}</span>
     </button>
   );
 }
 
+/**
+ * 移动端设置面板。
+ * 提供当前工作区信息及快捷导航链接。
+ * @param {Object} param - 组件属性。
+ */
 function MobileSettingsPanel({ workspace, denseLandscape = false }: { workspace: Workspace; denseLandscape?: boolean }) {
+  const t = useTranslations('Workspace');
   return (
     <div className={`h-full overflow-y-auto ${denseLandscape ? 'p-0 pb-[env(safe-area-inset-bottom)]' : 'p-3 pb-[calc(1rem+env(safe-area-inset-bottom))]'}`}>
       <div className="space-y-3">
         <div className="bg-mc-bg-secondary border border-mc-border rounded-lg p-4">
-          <div className="text-sm text-mc-text-secondary mb-2">Current workspace</div>
+          <div className="text-sm text-mc-text-secondary mb-2">{t('currentWorkspace')}</div>
           <div className="flex items-center gap-2 text-base font-medium">
             <span>{workspace.icon}</span>
             <span>{workspace.name}</span>
@@ -320,14 +356,14 @@ function MobileSettingsPanel({ workspace, denseLandscape = false }: { workspace:
         <Link href={`/workspace/${workspace.slug}/activity`} className="w-full min-h-11 px-4 rounded-lg border border-mc-border bg-mc-bg-secondary flex items-center justify-between text-sm">
           <span className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
-            Agent Activity Dashboard
+            {t('activityDashboard')}
           </span>
           <ExternalLink className="w-4 h-4 text-mc-text-secondary" />
         </Link>
         <Link href="/settings" className="w-full min-h-11 px-4 rounded-lg border border-mc-border bg-mc-bg-secondary flex items-center justify-between text-sm">
           <span className="flex items-center gap-2">
             <SettingsIcon className="w-4 h-4" />
-            Open Mission Control Settings
+            {t('openSettings')}
           </span>
           <ExternalLink className="w-4 h-4 text-mc-text-secondary" />
         </Link>
@@ -335,7 +371,7 @@ function MobileSettingsPanel({ workspace, denseLandscape = false }: { workspace:
         <Link href="/" className="w-full min-h-11 px-4 rounded-lg border border-mc-border bg-mc-bg-secondary flex items-center justify-between text-sm">
           <span className="flex items-center gap-2">
             <Home className="w-4 h-4" />
-            Back to Workspaces
+            {t('backToWorkspaces')}
           </span>
           <ExternalLink className="w-4 h-4 text-mc-text-secondary" />
         </Link>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle, Circle, Lock, AlertCircle, Loader2, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface PlanningOption {
   id: string;
@@ -48,7 +49,13 @@ interface PlanningTabProps {
   onSpecLocked?: () => void;
 }
 
+/**
+ * 任务规划标签页组件。
+ * 提供多轮问答式的任务需求规划功能，支持自动生成任务规格和助手。
+ */
 export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
+  const t = useTranslations('Planning');
+  
   const [state, setState] = useState<PlanningState | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
@@ -61,17 +68,17 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
   const [retryingDispatch, setRetryingDispatch] = useState(false);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
 
-  // Refs to track polling state without triggering re-renders
+  // 用于追踪轮询状态的 Refs
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollingWarningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pollingHardTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isPollingRef = useRef(false);
   const lastSubmissionRef = useRef<{ answer: string; otherText?: string } | null>(null);
   const currentQuestionRef = useRef<string | undefined>(undefined);
-  
 
-
-  // Load planning state (initial load only)
+  /**
+   * 加载规划状态（仅初始加载）。
+   */
   const loadState = useCallback(async () => {
     try {
       const res = await fetch(`/api/tasks/${taskId}/planning`);
@@ -79,17 +86,18 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
         const data = await res.json();
         setState(data);
         currentQuestionRef.current = data.currentQuestion?.question;
-        // Don't call onSpecLocked on initial load - only when planning completes actively
       }
     } catch (err) {
       console.error('Failed to load planning state:', err);
-      setError('Failed to load planning state');
+      setError(t('loading'));
     } finally {
       setLoading(false);
     }
-  }, [taskId]);
+  }, [taskId, t]);
 
-  // Stop polling (defined first to avoid circular dependency)
+  /**
+   * 停止轮询并清除所有计时器。
+   */
   const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -106,9 +114,11 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
     setIsWaitingForResponse(false);
   }, []);
 
-  // Poll for updates using the poll endpoint (lightweight OpenClaw check)
+  /**
+   * 通过 poll 接口轮询规划更新。
+   */
   const pollForUpdates = useCallback(async () => {
-    if (isPollingRef.current) return; // Prevent overlapping polls
+    if (isPollingRef.current) return;
     isPollingRef.current = true;
 
     try {
@@ -117,13 +127,12 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
         const data = await res.json();
 
         if (data.hasUpdates) {
-          // Clear any stale waiting warnings once updates are flowing
           setError(null);
 
           const newQuestion = data.currentQuestion?.question;
           const questionChanged = newQuestion && currentQuestionRef.current !== newQuestion;
 
-          // Force a full state reload from server to avoid stale state issues
+          // 强制重新从服务器加载完整状态
           const freshRes = await fetch(`/api/tasks/${taskId}/planning`);
           if (freshRes.ok) {
             const freshData = await freshRes.json();
@@ -146,22 +155,19 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
             setOtherText('');
             setIsSubmittingAnswer(false);
           }
-          // Always clear submitting state when we have a question
           if (data.currentQuestion) {
             setIsSubmittingAnswer(false);
             setSubmitting(false);
           }
 
-          // Show dispatch error if present
           if (data.dispatchError) {
-            setError(`Planning completed but dispatch failed: ${data.dispatchError}`);
+            setError(`${t('complete')} but ${data.dispatchError}`);
           }
 
           if (data.complete && onSpecLocked) {
             onSpecLocked();
           }
 
-          // Only stop polling when we actually have a question or completion
           if (data.currentQuestion || data.complete || data.dispatchError) {
             setIsWaitingForResponse(false);
             stopPolling();
@@ -173,54 +179,52 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
     } finally {
       isPollingRef.current = false;
     }
-  }, [taskId, onSpecLocked, stopPolling, setState, setError, setIsSubmittingAnswer, setSelectedOption, setOtherText]);
+  }, [taskId, onSpecLocked, stopPolling, t]);
 
-  // Start polling when waiting for response
+  /**
+   * 启动响应轮询。
+   */
   const startPolling = useCallback(() => {
     stopPolling();
     setError(null);
     setIsWaitingForResponse(true);
 
-    // Poll every 2 seconds for responsive UX
     pollingIntervalRef.current = setInterval(() => {
       pollForUpdates();
     }, 2000);
 
-    // Soft warning at 90s, but keep polling so long responses can still complete
     pollingWarningTimeoutRef.current = setTimeout(() => {
-      setError('The orchestrator is still processing. You can refresh safely — you will not lose your place in Planning Mode.');
+      setError(t('processingWarning'));
     }, 90000);
 
-    // Hard timeout at 5 minutes to avoid infinite wait states
     pollingHardTimeoutRef.current = setTimeout(() => {
       stopPolling();
       setSubmitting(false);
       setIsSubmittingAnswer(false);
-      setError('The orchestrator timed out after an extended wait. Please refresh the page and retry your last answer.');
+      setError(t('timeoutError'));
     }, 300000);
-  }, [pollForUpdates, stopPolling]);
+  }, [pollForUpdates, stopPolling, t]);
 
-  // Update currentQuestion ref when state changes
   useEffect(() => {
     if (state?.currentQuestion) {
       currentQuestionRef.current = state.currentQuestion.question;
     }
   }, [state]);
 
-  // Initial load
   useEffect(() => {
     loadState();
     return () => stopPolling();
   }, [loadState, stopPolling]);
 
-  // Auto-start polling if planning is in progress but no question loaded yet
   useEffect(() => {
     if (state && state.isStarted && !state.isComplete && !state.currentQuestion && !isWaitingForResponse) {
       startPolling();
     }
   }, [state, isWaitingForResponse, startPolling]);
 
-  // Start planning session
+  /**
+   * 开启规划会话。
+   */
   const startPlanning = async () => {
     setStarting(true);
     setError(null);
@@ -236,28 +240,27 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
           messages: data.messages || [],
           isStarted: true,
         }));
-
-        // Start polling for the first question
         startPolling();
       } else {
-        setError(data.error || 'Failed to start planning');
+        setError(data.error || t('starting'));
       }
     } catch (err) {
-      setError('Failed to start planning');
+      setError(t('starting'));
     } finally {
       setStarting(false);
     }
   };
 
-  // Submit answer
+  /**
+   * 提交答案。
+   */
   const submitAnswer = async () => {
     if (!selectedOption) return;
 
     setSubmitting(true);
-    setIsSubmittingAnswer(true); // Show submitting state in UI
+    setIsSubmittingAnswer(true);
     setError(null);
 
-    // Store submission for retry
     const submission = {
       answer: selectedOption?.toLowerCase() === 'other' ? 'other' : selectedOption,
       otherText: selectedOption?.toLowerCase() === 'other' ? otherText : undefined,
@@ -271,38 +274,32 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
         body: JSON.stringify(submission),
       });
 
-      const data = await res.json();
-
       if (res.ok) {
-        // Start polling for the next question or completion
-        // Don't clear selection yet - keep it visible while waiting for response
         startPolling();
       } else {
-        setError(data.error || 'Failed to submit answer');
-        setIsSubmittingAnswer(false); // Clear submitting state on error
-        // Clear selection on error so user can try again
+        const data = await res.json();
+        setError(data.error || t('sending'));
+        setIsSubmittingAnswer(false);
         setSelectedOption(null);
         setOtherText('');
       }
     } catch (err) {
-      setError('Failed to submit answer');
-      setIsSubmittingAnswer(false); // Clear submitting state on error
-      // Clear selection on error so user can try again
+      setError(t('sending'));
+      setIsSubmittingAnswer(false);
       setSelectedOption(null);
       setOtherText('');
-    } finally {
-      // Don't re-enable submit button here — wait until next question arrives
-      // setSubmitting(false) is handled when polling gets the new question
     }
   };
 
-  // Retry last submission
+  /**
+   * 重试上一次提交。
+   */
   const handleRetry = async () => {
     const submission = lastSubmissionRef.current;
     if (!submission) return;
 
     setSubmitting(true);
-    setIsSubmittingAnswer(true); // Show submitting state
+    setIsSubmittingAnswer(true);
     setError(null);
 
     try {
@@ -312,20 +309,17 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
         body: JSON.stringify(submission),
       });
 
-      const data = await res.json();
-
       if (res.ok) {
         startPolling();
       } else {
-        setError(data.error || 'Failed to submit answer');
-        // Clear submission state and selection on error so user can retry
+        const data = await res.json();
+        setError(data.error || t('sending'));
         setIsSubmittingAnswer(false);
         setSelectedOption(null);
         setOtherText('');
       }
     } catch (err) {
-      setError('Failed to submit answer');
-      // Clear submission state and selection on error so user can retry
+      setError(t('sending'));
       setIsSubmittingAnswer(false);
       setSelectedOption(null);
       setOtherText('');
@@ -334,7 +328,9 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
     }
   };
 
-  // Retry dispatch for failed planning completions
+  /**
+   * 重试任务派遣。
+   */
   const retryDispatch = async () => {
     setRetryingDispatch(true);
     setError(null);
@@ -344,31 +340,31 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
         method: 'POST',
       });
 
-      const data = await res.json();
-
       if (res.ok) {
-        console.log('Dispatch retry successful:', data.message);
         setError(null);
       } else {
-        setError(`Failed to retry dispatch: ${data.error}`);
+        const data = await res.json();
+        setError(`${t('retryDispatch')} failed: ${data.error}`);
       }
     } catch (err) {
-      setError('Failed to retry dispatch');
+      setError(t('retryDispatch'));
     } finally {
       setRetryingDispatch(false);
     }
   };
 
-  // Cancel planning
+  /**
+   * 取消当前规划会话。
+   */
   const cancelPlanning = async () => {
-    if (!confirm('Are you sure you want to cancel planning? This will reset the planning state.')) {
+    if (!confirm(t('cancelConfirm'))) {
       return;
     }
 
     setCanceling(true);
     setError(null);
-    setIsSubmittingAnswer(false); // Clear submitting state when canceling
-    stopPolling(); // Stop polling when canceling
+    setIsSubmittingAnswer(false);
+    stopPolling();
 
     try {
       const res = await fetch(`/api/tasks/${taskId}/planning`, {
@@ -376,7 +372,6 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
       });
 
       if (res.ok) {
-        // Reset state
         setState({
           taskId,
           isStarted: false,
@@ -385,10 +380,10 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
         });
       } else {
         const data = await res.json();
-        setError(data.error || 'Failed to cancel planning');
+        setError(data.error || t('canceling'));
       }
     } catch (err) {
-      setError('Failed to cancel planning');
+      setError(t('canceling'));
     } finally {
       setCanceling(false);
     }
@@ -398,34 +393,34 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-6 h-6 animate-spin text-mc-accent" />
-        <span className="ml-2 text-mc-text-secondary">Loading planning state...</span>
+        <span className="ml-2 text-mc-text-secondary">{t('loading')}</span>
       </div>
     );
   }
 
-  // Planning complete - show spec and agents
+  // 规划完成 - 显示规格和生成的助手
   if (state?.isComplete && state?.spec) {
     return (
       <div className="p-4 space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-green-400">
             <Lock className="w-5 h-5" />
-            <span className="font-medium">Planning Complete</span>
+            <span className="font-medium">{t('complete')}</span>
           </div>
           {state.dispatchError && (
             <div className="text-right">
-              <span className="text-sm text-amber-400">⚠️ Dispatch Failed</span>
+              <span className="text-sm text-amber-400">⚠️ {t('dispatchFailed')}</span>
             </div>
           )}
         </div>
         
-        {/* Dispatch Error with Retry */}
+        {/* 带有重试按钮的派遣错误提示 */}
         {state.dispatchError && (
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
               <div className="flex-1">
-                <p className="text-amber-400 text-sm font-medium mb-2">Task dispatch failed</p>
+                <p className="text-amber-400 text-sm font-medium mb-2">{t('dispatchFailedDesc')}</p>
                 <p className="text-amber-300 text-xs mb-3">{state.dispatchError}</p>
                 <div className="flex items-center gap-2">
                   <button
@@ -436,17 +431,17 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
                     {retryingDispatch ? (
                       <>
                         <Loader2 className="w-3 h-3 animate-spin" />
-                        Retrying...
+                        {t('retrying')}
                       </>
                     ) : (
                       <>
                         <CheckCircle className="w-3 h-3" />
-                        Retry Dispatch
+                        {t('retryDispatch')}
                       </>
                     )}
                   </button>
                   <span className="text-amber-400 text-xs">
-                    This will attempt to assign the task to an agent
+                    {t('retryDispatchHint')}
                   </span>
                 </div>
               </div>
@@ -454,14 +449,14 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
           </div>
         )}
         
-        {/* Spec Summary */}
+        {/* 规格摘要 */}
         <div className="bg-mc-bg border border-mc-border rounded-lg p-4">
           <h3 className="font-medium mb-2">{state.spec.title}</h3>
           <p className="text-sm text-mc-text-secondary mb-4">{state.spec.summary}</p>
           
           {state.spec.deliverables?.length > 0 && (
             <div className="mb-3">
-              <h4 className="text-sm font-medium mb-1">Deliverables:</h4>
+              <h4 className="text-sm font-medium mb-1">{t('deliverables')}</h4>
               <ul className="list-disc list-inside text-sm text-mc-text-secondary">
                 {state.spec.deliverables.map((d, i) => (
                   <li key={i}>{d}</li>
@@ -472,7 +467,7 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
           
           {state.spec.success_criteria?.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium mb-1">Success Criteria:</h4>
+              <h4 className="text-sm font-medium mb-1">{t('successCriteria')}</h4>
               <ul className="list-disc list-inside text-sm text-mc-text-secondary">
                 {state.spec.success_criteria.map((c, i) => (
                   <li key={i}>{c}</li>
@@ -482,10 +477,10 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
           )}
         </div>
         
-        {/* Generated Agents */}
+        {/* 生成的助手 */}
         {state.agents && state.agents.length > 0 && (
           <div>
-            <h3 className="font-medium mb-2">Agents Created:</h3>
+            <h3 className="font-medium mb-2">{t('agentsCreated')}</h3>
             <div className="space-y-2">
               {state.agents.map((agent, i) => (
                 <div key={i} className="bg-mc-bg border border-mc-border rounded-lg p-3 flex items-center gap-3">
@@ -503,15 +498,14 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
     );
   }
 
-  // Not started - show start button
+  // 未启动状态 - 显示启动按钮
   if (!state?.isStarted) {
     return (
       <div className="flex flex-col items-center justify-center p-8 space-y-4">
         <div className="text-center">
-          <h3 className="text-lg font-medium mb-2">Start Planning</h3>
+          <h3 className="text-lg font-medium mb-2">{t('startPlanning')}</h3>
           <p className="text-mc-text-secondary text-sm max-w-md">
-            I&apos;ll ask you a few questions to understand exactly what you need. 
-            All questions are multiple choice — just click to answer.
+            {t('startPlanningDesc')}
           </p>
         </div>
         
@@ -530,24 +524,24 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
           {starting ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              Starting...
+              {t('starting')}
             </>
           ) : (
-            <>📋 Start Planning</>
+            <>📋 {t('startPlanning')}</>
           )}
         </button>
       </div>
     );
   }
 
-  // Show current question
+  // 显示当前问题
   return (
     <div className="flex flex-col h-full">
-      {/* Progress indicator with cancel button */}
+      {/* 带有取消按钮的进度指示器 */}
       <div className="p-4 border-b border-mc-border flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm text-mc-text-secondary">
           <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
-          <span>Planning in progress...</span>
+          <span>{t('inProgress')}</span>
         </div>
         <button
           onClick={cancelPlanning}
@@ -557,18 +551,18 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
           {canceling ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Canceling...
+              {t('canceling')}
             </>
           ) : (
             <>
               <X className="w-4 h-4" />
-              Cancel
+              {t('retry')}
             </>
           )}
         </button>
       </div>
 
-      {/* Question area */}
+      {/* 问题区域 */}
       <div className="flex-1 overflow-y-auto p-6">
         {state?.currentQuestion ? (
           <div className="max-w-xl mx-auto">
@@ -608,14 +602,14 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
                       ) : null}
                     </button>
 
-                    {/* Other text input */}
+                    {/* 自定义文本输入 */}
                     {isOther && isSelected && (
                       <div className="mt-2 ml-11">
                         <input
                           type="text"
                           value={otherText}
                           onChange={(e) => setOtherText(e.target.value)}
-                          placeholder="Please specify..."
+                          placeholder={t('specifyPlaceholder')}
                           className="w-full bg-mc-bg border border-mc-border rounded px-3 py-2 text-sm focus:outline-none focus:border-mc-accent"
                           disabled={submitting}
                         />
@@ -654,7 +648,7 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
                             : 'text-red-400 hover:text-red-300'
                         }`}
                       >
-                        {submitting ? 'Retrying...' : 'Retry'}
+                        {submitting ? t('retrying') : t('retry')}
                       </button>
                     )}
                   </div>
@@ -662,7 +656,7 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
               </div>
             )}
 
-            {/* Submit button */}
+            {/* 提交按钮 */}
             <div className="mt-6">
               <button
                 onClick={submitAnswer}
@@ -672,18 +666,18 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
                 {submitting ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Sending...
+                    {t('sending')}
                   </>
                 ) : (
-                  'Continue →'
+                  t('continue')
                 )}
               </button>
 
-              {/* Waiting indicator after submit */}
+              {/* 提交后的等待指示器 */}
               {isSubmittingAnswer && !submitting && (
                 <div className="mt-4 flex items-center justify-center gap-2 text-sm text-mc-text-secondary">
                   <Loader2 className="w-4 h-4 animate-spin text-mc-accent" />
-                  <span>Waiting for response...</span>
+                  <span>{t('waitingResponse')}</span>
                 </div>
               )}
             </div>
@@ -693,18 +687,18 @@ export function PlanningTab({ taskId, onSpecLocked }: PlanningTabProps) {
             <div className="text-center">
               <Loader2 className="w-8 h-8 animate-spin text-mc-accent mx-auto mb-2" />
               <p className="text-mc-text-secondary">
-                {isWaitingForResponse ? 'Waiting for response...' : 'Waiting for next question...'}
+                {isWaitingForResponse ? t('waitingResponse') : t('waitingNextQuestion')}
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Conversation history (collapsed by default) */}
+      {/* 对话历史（默认折叠） */}
       {state?.messages && state.messages.length > 0 && (
         <details className="border-t border-mc-border">
           <summary className="p-3 text-sm text-mc-text-secondary cursor-pointer hover:bg-mc-bg-tertiary">
-            View conversation ({state.messages.length} messages)
+            {t('viewConversation', { count: state.messages.length })}
           </summary>
           <div className="p-3 space-y-2 max-h-48 overflow-y-auto bg-mc-bg">
             {state.messages.map((msg, i) => (

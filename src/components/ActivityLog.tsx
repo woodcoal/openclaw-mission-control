@@ -7,18 +7,29 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { formatDistanceToNow } from 'date-fns';
+import { useTranslations } from 'next-intl';
 import type { TaskActivity } from '@/lib/types';
 
 interface ActivityLogProps {
   taskId: string;
 }
 
+/**
+ * 任务活动日志组件。
+ * 长期按时间顺序显示任务的各项活动记录，支持自动轮询更新。
+ */
 export function ActivityLog({ taskId }: ActivityLogProps) {
+  const t = useTranslations('Activity');
+  
   const [activities, setActivities] = useState<TaskActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const lastCountRef = useRef(0);
 
+  /**
+   * 加载任务活动记录。
+   * @param {boolean} showLoading - 是否显示加载动画。
+   */
   const loadActivities = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setLoading(true);
@@ -37,18 +48,20 @@ export function ActivityLog({ taskId }: ActivityLogProps) {
     }
   }, [taskId]);
 
-  // Initial load
+  // 初始加载
   useEffect(() => {
     loadActivities(true);
   }, [taskId, loadActivities]);
 
-  // Polling function
+  /**
+   * 轮询新活动记录。
+   */
   const pollForActivities = useCallback(async () => {
     try {
       const res = await fetch(`/api/tasks/${taskId}/activities`);
       if (res.ok) {
         const data = await res.json();
-        // Only update if there are new activities
+        // 仅在有新活动时更新状态
         if (data.length !== lastCountRef.current) {
           setActivities(data);
           lastCountRef.current = data.length;
@@ -57,12 +70,11 @@ export function ActivityLog({ taskId }: ActivityLogProps) {
     } catch (error) {
       console.error('Polling error:', error);
     }
-  }, [taskId]); // setActivities is stable from React, no need to include
+  }, [taskId]);
 
-  // Poll for new activities every 5 seconds when task is in progress
+  // 任务进行期间，每 5 秒轮询一次新动态
   useEffect(() => {
     const pollInterval = setInterval(pollForActivities, 5000);
-
     pollingRef.current = pollInterval;
 
     return () => {
@@ -72,6 +84,9 @@ export function ActivityLog({ taskId }: ActivityLogProps) {
     };
   }, [taskId, pollForActivities]);
 
+  /**
+   * 获取活动类型对应的图标。
+   */
   const getActivityIcon = (type: string) => {
     switch (type) {
       case 'spawned':
@@ -92,7 +107,7 @@ export function ActivityLog({ taskId }: ActivityLogProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="text-mc-text-secondary">Loading activities...</div>
+        <div className="text-mc-text-secondary">{t('loadingActivities')}</div>
       </div>
     );
   }
@@ -101,7 +116,7 @@ export function ActivityLog({ taskId }: ActivityLogProps) {
     return (
       <div className="flex flex-col items-center justify-center py-8 text-mc-text-secondary">
         <div className="text-4xl mb-2">📝</div>
-        <p>No activity yet</p>
+        <p>{t('noActivityTask')}</p>
       </div>
     );
   }
@@ -113,14 +128,14 @@ export function ActivityLog({ taskId }: ActivityLogProps) {
           key={activity.id}
           className="flex gap-3 p-3 bg-mc-bg rounded-lg border border-mc-border"
         >
-          {/* Icon */}
+          {/* 图标 */}
           <div className="text-2xl flex-shrink-0">
             {getActivityIcon(activity.activity_type)}
           </div>
 
-          {/* Content */}
+          {/* 内容区域 */}
           <div className="flex-1 min-w-0">
-            {/* Agent info */}
+            {/* 助手信息 */}
             {activity.agent && (
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm">{activity.agent.avatar_emoji}</span>
@@ -130,12 +145,12 @@ export function ActivityLog({ taskId }: ActivityLogProps) {
               </div>
             )}
 
-            {/* Message */}
+            {/* 活动消息 */}
             <p className="text-sm text-mc-text break-words">
               {activity.message}
             </p>
 
-            {/* Metadata */}
+            {/* 元数据（可选显示） */}
             {activity.metadata && (
               <div className="mt-2 p-2 bg-mc-bg-tertiary rounded text-xs text-mc-text-secondary font-mono">
                 {typeof activity.metadata === 'string' 
@@ -144,7 +159,7 @@ export function ActivityLog({ taskId }: ActivityLogProps) {
               </div>
             )}
 
-            {/* Timestamp */}
+            {/* 时间戳 */}
             <div className="text-xs text-mc-text-secondary mt-2">
               {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
             </div>
