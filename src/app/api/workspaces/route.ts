@@ -7,10 +7,15 @@ export const dynamic = 'force-dynamic';
 
 // Helper to generate slug from name
 function generateSlug(name: string): string {
-  return name
+  const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+  
+  if (!slug || slug.length === 0) {
+    return `workspace_${Math.floor(Math.random() * 10000)}`;
+  }
+  return slug;
 }
 
 // GET /api/workspaces - List all workspaces with stats
@@ -81,7 +86,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, icon } = body;
+    const { name, description, icon, slug: providedSlug } = body;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -89,12 +94,21 @@ export async function POST(request: NextRequest) {
 
     const db = getDb();
     const id = crypto.randomUUID();
-    const slug = generateSlug(name);
+    
+    // Generate slug: use provided one if valid, otherwise generate from name
+    let slug = providedSlug && typeof providedSlug === 'string' && providedSlug.trim().length > 0
+      ? providedSlug.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-')
+      : generateSlug(name);
+    
+    // Final safety check for slug
+    if (!slug || slug.length === 0) {
+      slug = `workspace_${Math.floor(Math.random() * 10000)}`;
+    }
     
     // Check if slug already exists
     const existing = db.prepare('SELECT id FROM workspaces WHERE slug = ?').get(slug);
     if (existing) {
-      return NextResponse.json({ error: 'A workspace with this name already exists' }, { status: 400 });
+      return NextResponse.json({ error: 'A workspace with this ID/slug already exists' }, { status: 400 });
     }
 
     db.prepare(`

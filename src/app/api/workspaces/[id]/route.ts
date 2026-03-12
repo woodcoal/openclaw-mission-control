@@ -37,12 +37,12 @@ export async function PATCH(
   
   try {
     const body = await request.json();
-    const { name, description, icon } = body;
+    const { name, slug, description, icon } = body;
     
     const db = getDb();
     
     // Check workspace exists
-    const existing = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id);
+    const existing = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id) as any;
     if (!existing) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
@@ -53,8 +53,25 @@ export async function PATCH(
     
     if (name !== undefined) {
       updates.push('name = ?');
-      values.push(name);
+      values.push(name.trim());
     }
+
+    if (slug !== undefined && slug !== existing.slug) {
+      const formattedSlug = slug.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
+      if (formattedSlug.length === 0) {
+        return NextResponse.json({ error: 'Slug cannot be empty' }, { status: 400 });
+      }
+
+      // Check for slug uniqueness
+      const slugExists = db.prepare('SELECT id FROM workspaces WHERE slug = ? AND id != ?').get(formattedSlug, id);
+      if (slugExists) {
+        return NextResponse.json({ error: 'A workspace with this slug already exists' }, { status: 400 });
+      }
+
+      updates.push('slug = ?');
+      values.push(formattedSlug);
+    }
+
     if (description !== undefined) {
       updates.push('description = ?');
       values.push(description);

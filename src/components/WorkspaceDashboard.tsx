@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, ArrowRight, Folder, Users, CheckSquare, Trash2, AlertTriangle, Activity } from 'lucide-react';
+import { Plus, ArrowRight, Folder, Users, CheckSquare, Trash2, AlertTriangle, Activity, Settings, Edit3 } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { WorkspaceStats } from '@/lib/types';
+import { WorkspaceModal } from './WorkspaceModal';
 
 /**
  * 工作区仪表盘组件。
- * 显示所有工作区的统计信息并提供创建/删除功能。
+ * 显示所有工作区的统计信息并提供创建/编辑/删除功能。
  * @returns {JSX.Element} 渲染的工作区仪表盘。
  */
 export function WorkspaceDashboard() {
@@ -19,6 +20,7 @@ export function WorkspaceDashboard() {
   const [workspaces, setWorkspaces] = useState<WorkspaceStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceStats | null>(null);
 
   useEffect(() => {
     loadWorkspaces();
@@ -63,6 +65,13 @@ export function WorkspaceDashboard() {
               <h1 className="text-xl font-bold">{h('title')}</h1>
             </div>
             <div className="flex items-center gap-2">
+              <Link
+                href="/settings"
+                className="min-h-11 w-11 flex items-center justify-center rounded-lg border border-mc-border bg-mc-bg text-mc-text-secondary hover:text-mc-accent hover:border-mc-accent/50 transition-all"
+                title={t('globalSettings')}
+              >
+                <Settings className="w-5 h-5" />
+              </Link>
               <Link
                 href={workspaces.length > 0 ? `/workspace/${workspaces[0].slug}/activity` : '/workspace/default/activity'}
                 className="min-h-11 px-4 rounded-lg border border-mc-border bg-mc-bg text-mc-text-secondary hover:text-mc-text hover:bg-mc-bg-tertiary flex items-center gap-2 text-sm"
@@ -112,13 +121,14 @@ export function WorkspaceDashboard() {
                 key={workspace.id} 
                 workspace={workspace} 
                 onDelete={(id) => setWorkspaces(workspaces.filter(w => w.id !== id))}
+                onEdit={() => setEditingWorkspace(workspace)}
               />
             ))}
             
             {/* Add workspace card */}
             <button
               onClick={() => setShowCreateModal(true)}
-              className="border-2 border-dashed border-mc-border rounded-xl p-6 hover:border-mc-accent/50 transition-colors flex flex-col items-center justify-center gap-3 min-h-[200px] min-w-0"
+              className="border-2 border-dashed border-mc-border rounded-xl p-6 hover:border-mc-accent/50 transition-colors flex flex-col items-center justify-center gap-3 min-h-[172px] min-w-0"
             >
               <div className="w-12 h-12 rounded-full bg-mc-bg-tertiary flex items-center justify-center">
                 <Plus className="w-6 h-6 text-mc-text-secondary" />
@@ -131,10 +141,22 @@ export function WorkspaceDashboard() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <CreateWorkspaceModal 
+        <WorkspaceModal 
           onClose={() => setShowCreateModal(false)}
-          onCreated={() => {
+          onSuccess={() => {
             setShowCreateModal(false);
+            loadWorkspaces();
+          }}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {editingWorkspace && (
+        <WorkspaceModal 
+          workspace={editingWorkspace}
+          onClose={() => setEditingWorkspace(null)}
+          onSuccess={() => {
+            setEditingWorkspace(null);
             loadWorkspaces();
           }}
         />
@@ -147,7 +169,15 @@ export function WorkspaceDashboard() {
  * 工作区卡片组件。
  * @param {Object} param - 组件属性。
  */
-function WorkspaceCard({ workspace, onDelete }: { workspace: WorkspaceStats; onDelete: (id: string) => void }) {
+function WorkspaceCard({ 
+  workspace, 
+  onDelete, 
+  onEdit 
+}: { 
+  workspace: WorkspaceStats; 
+  onDelete: (id: string) => void;
+  onEdit: () => void;
+}) {
   const t = useTranslations('Workspace');
   const c = useTranslations('Common');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -191,6 +221,17 @@ function WorkspaceCard({ workspace, onDelete }: { workspace: WorkspaceStats; onD
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="p-1.5 rounded hover:bg-mc-accent/20 text-mc-text-secondary hover:text-mc-accent transition-colors opacity-0 group-hover:opacity-100"
+              title={c('edit')}
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
             {workspace.id !== 'default' && (
               <button
                 onClick={(e) => {
@@ -264,117 +305,5 @@ function WorkspaceCard({ workspace, onDelete }: { workspace: WorkspaceStats; onD
       </div>
     )}
     </>
-  );
-}
-
-/**
- * 创建工作区弹窗组件。
- * @param {Object} param - 组件属性。
- */
-function CreateWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const t = useTranslations('Workspace');
-  const c = useTranslations('Common');
-  const [name, setName] = useState('');
-  const [icon, setIcon] = useState('📁');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const icons = ['📁', '💼', '🏢', '🚀', '💡', '🎯', '📊', '🔧', '🌟', '🏠'];
-
-  /**
-   * 提交新工作区数据。
-   */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/workspaces', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), icon }),
-      });
-
-      if (res.ok) {
-        onCreated();
-      } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to create workspace');
-      }
-    } catch {
-      setError('Failed to create workspace');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-3 sm:p-4">
-      <div className="bg-mc-bg-secondary border border-mc-border rounded-t-xl sm:rounded-xl w-full max-w-md pb-[env(safe-area-inset-bottom)] sm:pb-0">
-        <div className="p-6 border-b border-mc-border">
-          <h2 className="text-lg font-semibold">{t('createWorkspace')}</h2>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Icon selector */}
-          <div>
-            <label className="block text-sm font-medium mb-2">{t('icon')}</label>
-            <div className="flex flex-wrap gap-2">
-              {icons.map((i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setIcon(i)}
-                  className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-colors ${
-                    icon === i 
-                      ? 'bg-mc-accent/20 border-2 border-mc-accent' 
-                      : 'bg-mc-bg border border-mc-border hover:border-mc-accent/50'
-                  }`}
-                >
-                  {i}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Name input */}
-          <div>
-            <label className="block text-sm font-medium mb-2">{t('workspaceName')}</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Acme Corp"
-              className="w-full bg-mc-bg border border-mc-border rounded-lg px-4 py-2 focus:outline-none focus:border-mc-accent"
-              autoFocus
-            />
-          </div>
-
-          {error && (
-            <div className="text-mc-accent-red text-sm">{error}</div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-mc-text-secondary hover:text-mc-text"
-            >
-              {c('cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={!name.trim() || isSubmitting}
-              className="px-6 py-2 bg-mc-accent text-mc-bg rounded-lg font-medium hover:bg-mc-accent/90 disabled:opacity-50"
-            >
-              {isSubmitting ? c('saving') : t('createWorkspace')}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
   );
 }

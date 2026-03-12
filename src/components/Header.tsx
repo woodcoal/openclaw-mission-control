@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Zap, Settings, ChevronLeft, LayoutGrid } from 'lucide-react';
+import { Zap, Settings, ChevronLeft, LayoutGrid, Edit3 } from 'lucide-react';
 import { useMissionControl } from '@/lib/store';
 import { format } from 'date-fns';
 import { useTranslations } from 'next-intl';
 import type { Workspace } from '@/lib/types';
+import { WorkspaceModal } from './WorkspaceModal';
 
 interface HeaderProps {
   workspace?: Workspace;
@@ -25,9 +26,11 @@ export function Header({ workspace, isPortrait = true }: HeaderProps) {
   const t = useTranslations('Header');
   const d = useTranslations('Dashboard');
   const c = useTranslations('Common');
+  const w = useTranslations('Workspace');
   const { agents, tasks, isOnline } = useMissionControl();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeSubAgents, setActiveSubAgents] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -81,8 +84,12 @@ export function Header({ workspace, isPortrait = true }: HeaderProps) {
               </div>
             </div>
 
-            <button onClick={() => router.push('/settings')} className="min-h-11 min-w-11 p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary shrink-0" title={t('settings')}>
-              <Settings className="w-5 h-5" />
+            <button 
+              onClick={() => setIsEditing(true)} 
+              className="min-h-11 min-w-11 p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary shrink-0" 
+              title={w('editWorkspace')}
+            >
+              <Edit3 className="w-5 h-5" />
             </button>
           </div>
 
@@ -163,11 +170,36 @@ export function Header({ workspace, isPortrait = true }: HeaderProps) {
               <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-mc-accent-green animate-pulse' : 'bg-mc-accent-red'}`} />
               {isOnline ? c('online') : c('offline')}
             </div>
-            <button onClick={() => router.push('/settings')} className="min-h-11 min-w-11 p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary" title={t('settings')}>
-              <Settings className="w-5 h-5" />
-            </button>
+            {workspace ? (
+              <button 
+                onClick={() => setIsEditing(true)} 
+                className="min-h-11 min-w-11 p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary" 
+                title={w('editWorkspace')}
+              >
+                <Edit3 className="w-5 h-5" />
+              </button>
+            ) : (
+              <button 
+                onClick={() => router.push('/settings')} 
+                className="min-h-11 min-w-11 p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary" 
+                title={t('settings')}
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </>
+      )}
+
+      {isEditing && workspace && (
+        <WorkspaceModal
+          workspace={workspace}
+          onClose={() => setIsEditing(false)}
+          onSuccess={() => {
+            setIsEditing(false);
+            router.refresh(); // Refresh to show updated name/slug/icon
+          }}
+        />
       )}
     </header>
   );

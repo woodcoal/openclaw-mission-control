@@ -9,6 +9,7 @@ import { AgentsSidebar } from '@/components/AgentsSidebar';
 import { MissionQueue } from '@/components/MissionQueue';
 import { LiveFeed } from '@/components/LiveFeed';
 import { SSEDebugPanel } from '@/components/SSEDebugPanel';
+import { WorkspaceModal } from '@/components/WorkspaceModal';
 import { useMissionControl } from '@/lib/store';
 import { useSSE } from '@/hooks/useSSE';
 import { debug } from '@/lib/debug';
@@ -340,6 +341,9 @@ function MobileTabButton({ label, active, icon, onClick }: { label: string; acti
  */
 function MobileSettingsPanel({ workspace, denseLandscape = false }: { workspace: Workspace; denseLandscape?: boolean }) {
   const t = useTranslations('Workspace');
+  const [isEditing, setIsEditing] = useState(false);
+  const router = useRouter();
+
   return (
     <div className={`h-full overflow-y-auto ${denseLandscape ? 'p-0 pb-[env(safe-area-inset-bottom)]' : 'p-3 pb-[calc(1rem+env(safe-area-inset-bottom))]'}`}>
       <div className="space-y-3">
@@ -360,7 +364,19 @@ function MobileSettingsPanel({ workspace, denseLandscape = false }: { workspace:
           </span>
           <ExternalLink className="w-4 h-4 text-mc-text-secondary" />
         </Link>
-        <Link href="/settings" className="w-full min-h-11 px-4 rounded-lg border border-mc-border bg-mc-bg-secondary flex items-center justify-between text-sm">
+        
+        <button 
+          onClick={() => setIsEditing(true)}
+          className="w-full min-h-11 px-4 rounded-lg border border-mc-border bg-mc-bg-secondary flex items-center justify-between text-sm"
+        >
+          <span className="flex items-center gap-2">
+            <SettingsIcon className="w-4 h-4" />
+            {t('editWorkspace')}
+          </span>
+          <Edit3 className="w-4 h-4 text-mc-text-secondary" />
+        </button>
+
+        <Link href="/settings" className="w-full min-h-11 px-4 rounded-lg border border-mc-border bg-mc-bg-secondary flex items-center justify-between text-sm opacity-50">
           <span className="flex items-center gap-2">
             <SettingsIcon className="w-4 h-4" />
             {t('openSettings')}
@@ -376,6 +392,17 @@ function MobileSettingsPanel({ workspace, denseLandscape = false }: { workspace:
           <ExternalLink className="w-4 h-4 text-mc-text-secondary" />
         </Link>
       </div>
+
+      {isEditing && (
+        <WorkspaceModal
+          workspace={workspace}
+          onClose={() => setIsEditing(false)}
+          onSuccess={() => {
+            setIsEditing(false);
+            window.location.reload(); // Hard reload for mobile if slug changed
+          }}
+        />
+      )}
     </div>
   );
 }
