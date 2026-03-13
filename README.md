@@ -38,14 +38,20 @@ https://github.com/user-attachments/assets/76af060c-fdb1-40cb-b575-46c7a807845d
 
 ---
 
-## 🆕 What's New in v1.5.0
+## 🆕 What's New in v1.5.1
 
-- **Task Image Attachments** — Upload reference images to tasks. AI agents see them during dispatch — perfect for UI mockups, screenshots, and visual specs.
-- **PORT env var support** — Set `PORT` in `.env.local` and it actually works now.
-- **Webhook auth fix** — Split-service deployments no longer have completion callbacks blocked by API token middleware.
-- **Agent status fix** — Agents correctly show standby when idle instead of stuck on "Working".
+- **Canonical agent catalog sync** — OpenClaw agents now sync into Mission Control automatically (startup/scheduled + dispatch-triggered).
+- **Dynamic per-task routing** — Dispatch supports hybrid routing (planner candidates + role/fallback safeguards) instead of rigid fixed-role assumptions.
+- **Strict stage governance** — Evidence gates enforced for stage progression (`deliverable + activity`), fail-back requires reason, and inconsistent `done` states are blocked.
+- **Failure escalation with fixer guarantee** — Repeated same-stage failures escalate and auto-provision fixer coverage if missing.
+- **Team assignment cleanup** — Role-name normalization removed duplicate role rows (e.g., `Learner` vs `learner`) and eliminated editable free-text role-name drift.
+- **Live working/standby badges** — Agent status tags now update live from task state transitions.
 
 See the full [CHANGELOG](CHANGELOG.md) for details.
+
+### Releases
+- GitHub Releases: https://github.com/crshdn/mission-control/releases
+- Latest target: `v1.5.1`
 
 ---
 ## ✨ Features
